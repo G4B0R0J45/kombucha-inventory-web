@@ -1,0 +1,7 @@
+# El Fermentario — web API dependencies
+fastapi>=0.115
+uvicorn[standard]>=0.30
+
+# Optional tooling (not needed to run the API):
+#   pip install "qrcode[pil]"   -> QR labels        (generate_lot_label.py)
+#   pip install matplotlib      -> PNG sales charts  (inventory_cli.py, option 6)

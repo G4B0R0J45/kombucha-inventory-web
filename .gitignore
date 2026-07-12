@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# El Fermentario data & derived output.
+# The CSV/JSON are the LOCAL source of truth for now (a hosted database
+# replaces them in a later milestone); they are per-machine, never committed.
+movements.csv
+inventory_data.json
+logs/
+reports/
+labels/
+backup_pre_import/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
