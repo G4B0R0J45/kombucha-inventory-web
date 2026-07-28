@@ -33,6 +33,7 @@ Interactive docs: http://127.0.0.1:8000/docs
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 
@@ -324,3 +325,20 @@ def remove_staff(name: str, service: InventoryService = Depends(get_service)):
         raise HTTPException(status_code=404, detail=f"'{name}' is not a registered staff member.")
     # The service removes by 1-based index; translate the name to its position.
     return _op_or_error(service.remove_staff(staff.index(name) + 1))
+
+
+# ------------------------------------------------------------
+# FRONTEND (static PWA) — must stay at the END of this file
+# ------------------------------------------------------------
+# Starlette matches routes in registration order, so mounting "/" LAST means
+# every API path above wins and the mount only catches what is left over:
+# "/" serves frontend/index.html (html=True), plus styles, scripts and icons.
+# Serving the frontend from the API itself puts both on the same origin, so
+# the browser needs no CORS at all — the middleware above stays only for
+# development setups that still serve the frontend separately.
+from fastapi.staticfiles import StaticFiles  # noqa: E402  (kept next to its mount)
+
+_FRONTEND_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+if os.path.isdir(_FRONTEND_DIR):  # optional: the API still runs without it
+    app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")

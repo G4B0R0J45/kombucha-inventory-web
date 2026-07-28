@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <!-- viewport-fit=cover: the PWA runs edge-to-edge on phones with a notch -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>El Fermentario</title>
+  <meta name="theme-color" content="#2a1e12">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <!-- QR scanning straight from the browser camera; no build step needed -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body data-movement-type="entry">
+
+  <header class="topbar">
+    <h1 class="brand">El Fermentario</h1>
+    <span class="brand-sub" id="screen_title">registrar movimiento</span>
+  </header>
+
+  <!-- ============ SCREEN: registrar (the main flow) ============ -->
+  <main class="sheet screen" id="screen_register">
+    <div class="segment" role="tablist" aria-label="Tipo de movimiento">
+      <button type="button" id="btn_entry" class="segment-btn is-active"
+              role="tab" aria-selected="true">Entrada</button>
+      <button type="button" id="btn_exit" class="segment-btn"
+              role="tab" aria-selected="false">Salida</button>
+    </div>
+
+    <!-- No <form>: submission goes through fetch(); a native submit would
+         reload the page and lose the scanner state -->
+    <div class="fields">
+      <label class="field">
+        <span class="field-label">Quién registra</span>
+        <select id="staff_select"></select>
+        <input id="staff_input" type="text" placeholder="Tu nombre" hidden>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Sabor</span>
+        <select id="flavor_select"></select>
+        <span id="stock_hint" class="stock-hint" hidden></span>
+      </label>
+
+      <label class="field" id="lot_field">
+        <span class="field-label">Lote</span>
+        <input id="lot_input" type="text" autocomplete="off"
+               autocapitalize="characters" placeholder="LOT202606-K114">
+      </label>
+      <p class="fifo-note" id="fifo_note" hidden>
+        Las salidas no llevan lote: el sistema descuenta de los lotes más
+        antiguos (FIFO) y te muestra cuáles al confirmar.
+      </p>
+
+      <label class="field">
+        <span class="field-label">Botellas</span>
+        <input id="qty_input" type="number" inputmode="numeric" min="1" step="1"
+               placeholder="0">
+      </label>
+
+      <label class="field">
+        <span class="field-label">Nota <em>(opcional)</em></span>
+        <input id="note_input" type="text" placeholder="p. ej. merma, muestra…">
+      </label>
+
+      <button type="button" id="btn_scan" class="scan-btn">
+        <span class="scan-corners" aria-hidden="true"></span>
+        Escanear etiqueta QR
+      </button>
+
+      <button type="button" id="btn_submit" class="submit-btn">
+        Registrar entrada
+      </button>
+    </div>
+
+    <section id="result" class="result" hidden aria-live="polite"></section>
+  </main>
+
+  <!-- ============ SCREEN: inventario ============ -->
+  <main class="sheet screen" id="screen_inventory" hidden>
+    <div id="inventory_warnings"></div>
+    <div id="inventory_list" class="stack"></div>
+  </main>
+
+  <!-- ============ SCREEN: historial ============ -->
+  <main class="sheet screen" id="screen_history" hidden>
+    <div class="toolbar">
+      <select id="history_flavor" aria-label="Filtrar por sabor"></select>
+      <select id="history_limit" aria-label="Cuántos movimientos">
+        <option value="20" selected>Últimos 20</option>
+        <option value="50">Últimos 50</option>
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div id="history_list" class="stack"></div>
+  </main>
+
+  <!-- ============ SCREEN: ventas ============ -->
+  <main class="sheet screen" id="screen_sales" hidden>
+    <div id="sales_content" class="stack"></div>
+  </main>
+
+  <!-- ============ SCREEN: catálogo (sabores + personal) ============ -->
+  <main class="sheet screen" id="screen_catalog" hidden>
+    <h2 class="section-title">Sabores</h2>
+    <div class="toolbar">
+      <input id="new_flavor_name" type="text" placeholder="Nuevo sabor">
+      <input id="new_flavor_min" type="number" inputmode="numeric" min="0"
+             placeholder="Mín" class="narrow">
+      <button type="button" id="btn_add_flavor" class="mini-btn">Agregar</button>
+    </div>
+    <div id="catalog_flavors" class="stack"></div>
+
+    <h2 class="section-title">Personal</h2>
+    <div class="toolbar">
+      <input id="new_staff_name" type="text" placeholder="Nombre">
+      <button type="button" id="btn_add_staff" class="mini-btn">Agregar</button>
+    </div>
+    <div id="catalog_staff" class="stack"></div>
+  </main>
+
+  <!-- ============ bottom navigation ============ -->
+  <nav class="tabbar" aria-label="Pantallas">
+    <button type="button" class="tab is-active" data-screen="register">Registrar</button>
+    <button type="button" class="tab" data-screen="inventory">Inventario</button>
+    <button type="button" class="tab" data-screen="history">Historial</button>
+    <button type="button" class="tab" data-screen="sales">Ventas</button>
+    <button type="button" class="tab" data-screen="catalog">Catálogo</button>
+  </nav>
+
+  <!-- Full-screen scanner overlay, opened on demand -->
+  <div id="scanner_overlay" class="scanner-overlay" hidden>
+    <div id="qr_reader"></div>
+    <p class="scanner-tip">Apunta al QR del sabor o del lote</p>
+    <button type="button" id="btn_scan_close" class="scan-close">Cancelar</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

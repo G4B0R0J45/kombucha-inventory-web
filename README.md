@@ -21,7 +21,8 @@ and are reached identically from the terminal and from HTTP.
   interfaces
     ├── inventory_cli.py     terminal  (input()/print())
     ├── import_appsheet.py   one-time AppSheet migration
-    └── app/                 HTTP API   (FastAPI)
+    ├── app/                 HTTP API   (FastAPI)
+    └── frontend/            web PWA    (vanilla JS; talks only to app/)
           ↓
   fermentario/
     service.py   operations + the invariant "memory always matches disk"
@@ -119,6 +120,39 @@ Design notes (stock as replayed history, why exits store no lot, the
 `FLAVOR:` QR prefix, the error-handling policy) are documented in the code
 and carried over from the original project.
 
+## Frontend (PWA)
+
+FastAPI serves `frontend/` at the root: with the API running, open
+http://localhost:8000/ — no Node, no build step. The static mount lives at
+the **end** of `app/main.py` on purpose (routes are matched in registration
+order, so every API path wins and the mount catches the rest), which also
+puts page and API on the same origin: CORS disappears by design.
+
+Five screens over the existing endpoints, in strict presentation-only
+discipline (no business rule lives in JavaScript):
+
+- **Registrar** — the main flow. One QR button; the payload routes itself:
+  `FLAVOR:<name>` fills the flavor (validated against the catalog), anything
+  else fills the lot (entries only — exits carry no lot, FIFO decides). Exit
+  responses show the FIFO breakdown so staff know which physical lots to pull.
+- **Inventario** — stock per flavor with lot breakdown, low-stock badges and
+  history-consistency warnings.
+- **Historial** — newest first, filter by flavor, delete with the server's
+  own guard (an entry that a past exit depends on is refused with the reason).
+- **Ventas** — totals, per-flavor bars, per-month table.
+- **Catálogo** — flavors (add / minimum / rename / two-step delete mirroring
+  the API's `?confirm=true`) and staff.
+
+Installable as a PWA (manifest + service worker). The worker caches the app
+shell only and **never** the API: stock must always come from the server —
+the web equivalent of "memory always matches disk". Bump `CACHE_VERSION`
+in `frontend/service-worker.js` when shell files change.
+
+**Camera note:** browsers allow camera access only in secure contexts
+(`localhost` or HTTPS). To scan from a phone on the LAN, generate a local
+cert with `mkcert` and run
+`uvicorn app.main:app --host 0.0.0.0 --ssl-keyfile key.pem --ssl-certfile cert.pem`.
+
 ## Design decisions (unchanged from the core project)
 
 - **The history is the source of truth.** Stock is never stored; it is
@@ -137,7 +171,8 @@ and carried over from the original project.
 1. ✅ Separate business logic from the terminal interface (`fermentario` package).
 2. ✅ Consolidate the AppSheet importer onto the same core.
 3. ✅ **Wrap the service layer in a local FastAPI app (this milestone).**
-4. ⬜ Responsive web frontend (PWA) with QR scanning via the phone camera.
+4. ✅ **Responsive web frontend (PWA) with QR scanning via the phone camera
+   (this milestone).**
 5. ⬜ Migrate storage from CSV/JSON to a hosted database (Supabase / PostgreSQL)
    for safe concurrent multi-user access, with login (which also signs each
    movement automatically).
