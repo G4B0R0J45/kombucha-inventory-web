@@ -1,14 +1,19 @@
 /* El Fermentario — service worker.
-   POLICY: cache the app SHELL (html/css/js/icons), NEVER the API.
-   Stock numbers must always come from the server: a cached /inventory or a
-   replayed POST would show (or create) stale data — the web equivalent of
-   violating the "memory always matches disk" invariant. So API requests
-   (anything that is not a shell file) pass straight through to the network.
+   POLICY: NETWORK-FIRST for the app shell, NEVER cache the API.
 
-   Bump CACHE_VERSION whenever a shell file changes: activation then deletes
-   the old cache, which is how updates reach installed PWAs. */
+   Why network-first (and not cache-first): during active development,
+   cache-first serves yesterday's files until CACHE_VERSION is bumped — a
+   fixed bug can look "back" just because the cache outlived the fix. With
+   network-first the browser always tries the server (fresh files whenever
+   online) and falls back to the last good cached copy only when offline.
+   The cost is a slightly slower open; the gain is that what you see is
+   what is on disk. Revisit cache-first when the app is hosted and stable.
 
-const CACHE_VERSION = "fermentario-shell-v2";
+   API requests (anything not in SHELL_FILES) always pass straight through:
+   stock numbers must come from the server — a cached /inventory would be
+   the web equivalent of violating "memory always matches disk". */
+
+const CACHE_VERSION = "fermentario-shell-v3";
 const SHELL_FILES = [
   "./",
   "index.html",
@@ -43,9 +48,14 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" || !is_shell) {
     return;   // API and everything else: straight to the network, uncached
   }
-  // Shell: cache-first so the app opens instantly (and offline shows the UI,
-  // which will then report "sin conexión" honestly instead of stale numbers).
   event.respondWith(
-    caches.match(event.request).then((hit) => hit || fetch(event.request)),
+    fetch(event.request)
+      .then((response) => {
+        // Keep the cache warm with the freshest copy for offline fallback.
+        const copy = response.clone();
+        caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request)),   // offline: last good copy
   );
 });

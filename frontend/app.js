@@ -132,8 +132,12 @@ function set_movement_type(type) {
 
 async function open_scanner() {
   el("scanner_overlay").hidden = false;
-  state.scanner = state.scanner || new Html5Qrcode("qr_reader");
+  // Everything — including constructing the scanner — inside the try: if the
+  // CDN script failed to load (offline, VPN, ad-blocker), `Html5Qrcode` is
+  // undefined and the construction itself throws. Outside a try, that would
+  // strand the overlay open with no message.
   try {
+    state.scanner = state.scanner || new Html5Qrcode("qr_reader");
     await state.scanner.start(
       { facingMode: "environment" },           // back camera on phones
       { fps: 10, qrbox: { width: 220, height: 220 } },
@@ -141,9 +145,13 @@ async function open_scanner() {
     );
   } catch (error) {
     await close_scanner();
-    show_error("No se pudo abrir la cámara",
-      "Revisa el permiso de cámara del navegador. En un teléfono, la página " +
-      "debe servirse por HTTPS (o localhost) para poder usar la cámara.");
+    const library_missing = typeof Html5Qrcode === "undefined";
+    show_error("No se pudo abrir el escáner",
+      library_missing
+        ? "La librería de escaneo no cargó (¿sin internet, o una VPN/bloqueador " +
+          "está bloqueando unpkg.com?). Recarga la página con conexión."
+        : "Revisa el permiso de cámara del navegador. En un teléfono, la página " +
+          "debe servirse por HTTPS (o localhost) para poder usar la cámara.");
   }
 }
 
